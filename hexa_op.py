@@ -1,5 +1,6 @@
 import bpy
 from bpy import context
+from bpy.ops import node
 
 from bpy.types import Operator
 
@@ -18,7 +19,7 @@ class OBJECT_OT_HexagonGenerator(Operator):
         if(context.scene.delete_scene):
             self.deleteScene()
 
-        self.createHexagon()
+        self.createHexagon(context)
         return {'FINISHED'}
 
     def deleteScene(self):
@@ -29,27 +30,17 @@ class OBJECT_OT_HexagonGenerator(Operator):
         # löscht überbleibende Meshdaten etc.
         bpy.ops.outliner.orphans_purge()  # löscht überbleibende Meshdaten etc.
 
-    def createHexagon(self):
-        # create a hexagon
-        plane = bpy.ops.mesh.primitive_plane_add()
+    def createHexagon(self, context):
+
+        bpy.ops.mesh.primitive_plane_add()
         bpy.ops.object.modifier_add(type='NODES')
 
-        # mod = bpy.data.objects[bpy.context.active_object.name].modifiers["GeometryNodes"]
-        node_group = bpy.data.node_groups["Geometry Nodes"]
-        node_group.nodes.new(type='GeometryNodeMeshCylinder')
-        node_group.nodes.new(node_item='71')
-        # new_node = 
-        # group_in = node_group.
-        # nodeData = bpy.data.node_groups['Geometry Nodes'].nodes
-        # bpy.ops.node.select()
-        
-        # bpy.ops.node.select(wait_to_deselect_others=False, deselect_all=True)
+        geo_nodes = bpy.data.node_groups["Geometry Nodes"]
+        group_out = geo_nodes.nodes["Group Output"]
 
+        cylinder = geo_nodes.nodes.new(type='GeometryNodeMeshCylinder')
+        cylinder.inputs[0].default_value = context.scene.hexagon_sides
+        geo_nodes.links.new(cylinder.outputs[0], group_out.inputs[0])
 
-        # bpy.ops.node.add_search(use_transform=True, node_item='97')
-        # for key in mod.keys:
-        #     print(key)
-
-
-        # nodes = bpy.context.object.modifiers["Nodes"]
-
+        math_node = geo_nodes.nodes.new(type='ShaderNodeMath')
+        inst_on_points = geo_nodes.nodes.new(type='GeometryNodeInstanceOnPoints')
