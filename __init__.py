@@ -20,8 +20,7 @@ classes = (OBJECT_OT_HexagonGenerator, OBJECT_PT_HexagonPanel)
 PROPS = [
     ("delete_scene", bpy.props.BoolProperty(name="Delete actual scene", default=True)),
     ("created_world", bpy.props.PointerProperty(name="Created world", type=bpy.types.Object)),
-    ("nodes", bpy.props.PointerProperty(name="Created geometry nodes modifier", type=bpy.types.Object)),
-    ("hexagon_radius", bpy.props.FloatProperty(name="Hexagon Radius", default=3)),
+    ("hexagon_amount", bpy.props.IntProperty(name="Number of hexagons", default=100)),
     ("hexagon_sides", bpy.props.IntProperty(name="Hexagon Sides", default=6)),
     ("grid_height", bpy.props.IntProperty(name="Grid Height", default=10)),
     ("grid_width", bpy.props.IntProperty(name="Grid Width", default=10)),
