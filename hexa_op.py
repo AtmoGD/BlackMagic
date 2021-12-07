@@ -28,10 +28,9 @@ class OBJECT_OT_HexagonGenerator(Operator):
         # löscht selektierte objekte
         bpy.ops.object.delete(use_global=False, confirm=False)
         # löscht überbleibende Meshdaten etc.
-        bpy.ops.outliner.orphans_purge()  # löscht überbleibende Meshdaten etc.
+        bpy.ops.outliner.orphans_purge()
 
     def createHexagon(self, context):
-
         bpy.ops.mesh.primitive_plane_add()
         bpy.ops.object.modifier_add(type='NODES')
 
