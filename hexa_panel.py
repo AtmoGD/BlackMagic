@@ -11,7 +11,7 @@ class OBJECT_PT_HexagonPanel(Panel):
 
         layout.row().prop(context.scene, "delete_scene")
         layout.row().prop(context.scene, "hexagon_amount")
-        layout.row().prop(context.scene, "hexagon_sides")
-        layout.row().prop(context.scene, "grid_height")
+        layout.row().prop(context.scene, "hexagon_spacing")
+        layout.row().prop(context.scene, "source_hexagons")
         layout.row().prop(context.scene, "grid_width")
         layout.row().operator("object.hexagon_generator", text="Generate Hexagon")

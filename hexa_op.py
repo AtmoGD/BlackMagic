@@ -7,6 +7,8 @@ class Params():
         self.context = context
         self.created_world = context.scene.created_world
         self.hexagon_amount = context.scene.hexagon_amount
+        self.hexagon_spacing = context.scene.hexagon_spacing
+        self.source_hexagons = context.scene.source_hexagons
 
 class OBJECT_OT_HexagonGenerator(Operator):
     bl_idname = "object.hexagon_generator"
@@ -51,6 +53,19 @@ class OBJECT_OT_HexagonGenerator(Operator):
         print("Change Parameters")
 
     def GenerateWorld(self, params):
+        # Create new Collection
+        # collection = bpy.data.collections.new("HexagonWorld")
+        # bpy.context.scene.collection.children.link(collection)
+
+        # Add an empty object to manipulate transform animations and one for scale animations
+        bpy.ops.object.empty_add()
+        animation_transform_object = params.context.selected_objects[0]
+        animation_transform_object.name = "AnimationTransformController"
+
+        bpy.ops.object.empty_add()
+        animation_scale_object = params.context.selected_objects[0]
+        animation_scale_object.name = "AnimationScaleController"
+
         # Create new mesh and save it. It doesn't matter wich one we just need a mesh to add the geometry nodes
         bpy.ops.mesh.primitive_plane_add()
         params.created_world = params.context.selected_objects[0]
@@ -68,26 +83,178 @@ class OBJECT_OT_HexagonGenerator(Operator):
         nodes = geo_node_group.nodes
         group_in = nodes["Group Input"]
         group_out = nodes["Group Output"]
-        self.ChangeLocation(group_out, 2000, 500)
+        self.ChangeLocation(group_out, 4000, 0)
 
         # Create and update the input node with all the parameters
         self.CreateNodeInputs(geo_node_group)
         self.UpdateNodeInputs(geo_node_group, params)
 
-        multiply = self.CreateMultiplyNode(nodes)
+        # ---------------------------------------- Start with the Nodes ------------------------------------
+        
+        positions = self.GeneratePositions(geo_node_group, group_in, nodes, animation_transform_object)
+        masked_positions = self.GenerateMaskedPositions(geo_node_group, nodes, positions)
+
+        instance_on_points = self.CreateInstantiateOnPointsNode(nodes, 3600, -1200)
+
+
+        # Create the output node ---------------- JUST TESTING ---------------------------------------------
+        geo_node_group.links.new(instance_on_points.outputs[0], group_out.inputs[0])
+
+    def GeneratePositions(self, geo_node_group, group_in, nodes, animation_object):
+        
+        multiply = self.CreateMultiplyNode(nodes, x=0, y=300)
         geo_node_group.links.new(group_in.outputs["hexagon_amount"], multiply.inputs[0])
         geo_node_group.links.new(group_in.outputs["hexagon_amount"], multiply.inputs[1])
 
-        mesh_line = self.CreateMeshLineNode(nodes, 200, 50)
+        mesh_line = self.CreateMeshLineNode(nodes, 200, 350)
         geo_node_group.links.new(multiply.outputs[0], mesh_line.inputs[0])
 
+        index = self.CreateIndexNode(nodes, 0, -200)
 
+        modulo = self.CreateModuloNode(nodes, 200, -50)
+        geo_node_group.links.new(index.outputs[0], modulo.inputs[0])
+        geo_node_group.links.new(group_in.outputs["hexagon_amount"], modulo.inputs[1])
+
+        divide = self.CreateDivideNode(nodes, 200, -250)
+        geo_node_group.links.new(index.outputs[0], divide.inputs[0])
+        geo_node_group.links.new(group_in.outputs["hexagon_amount"], divide.inputs[1])
+
+        floor = self.CreateFloorNode(nodes, 400, -200)
+        geo_node_group.links.new(divide.outputs[0], floor.inputs[0])
+
+        newModulo = self.CreateModuloNode(nodes, 600, -250)
+        geo_node_group.links.new(floor.outputs[0], newModulo.inputs[0])
+        newModulo.inputs[1].default_value = 2
+
+        multiply = self.CreateMultiplyNode(nodes, 800, -250)
+        geo_node_group.links.new(newModulo.outputs[0], multiply.inputs[0])
+        multiply.inputs[1].default_value = 0.5
+
+        add = self.CreateAddNode(nodes, 1000, -50)
+        geo_node_group.links.new(modulo.outputs[0], add.inputs[0])
+        geo_node_group.links.new(multiply.outputs[0], add.inputs[1])
+
+        combineXYZ = self.CreateCombineXYZNode(nodes, 1200, -150)
+        geo_node_group.links.new(add.outputs[0], combineXYZ.inputs[0])
+        geo_node_group.links.new(floor.outputs[0], combineXYZ.inputs[1])
+        combineXYZ.inputs[2].default_value = 0
+
+        multiply_vector = self.CreateVectorMultiplyNode(nodes, 1400, -150)
+        geo_node_group.links.new(combineXYZ.outputs[0], multiply_vector.inputs[0])
+        multiply_vector.inputs[1].default_value = (1.732, 1.5, 1)
+
+        add = self.CreateAddNode(nodes, 1400, -400)
+        add.inputs[0].default_value = 1
+        geo_node_group.links.new(group_in.outputs["hexagon_spacing"], add.inputs[1])
+
+        vector_scale = self.CreateVectorScaleNode(nodes, 1600, -150)
+        geo_node_group.links.new(multiply_vector.outputs[0], vector_scale.inputs[0])
+        geo_node_group.links.new(add.outputs[0], vector_scale.inputs[3])
+
+        set_position = self.CreateSetPositionNode(nodes, 1800, 0)
+        geo_node_group.links.new(mesh_line.outputs[0], set_position.inputs[0])
+        geo_node_group.links.new(vector_scale.outputs[0], set_position.inputs[2])
+
+        bounding_box = self.CreateBoundingBoxNode(nodes, 2000, -200)
+        geo_node_group.links.new(set_position.outputs[0], bounding_box.inputs[0])
+
+        vector_add = self.CreateVectorAddNode(nodes, 2200, -200)
+        geo_node_group.links.new(bounding_box.outputs[1], vector_add.inputs[0])
+        geo_node_group.links.new(bounding_box.outputs[2], vector_add.inputs[1])
+
+        value = self.CreateValueNode(nodes, 2200, -400, -0.5)
+        
+        vector_scale = self.CreateVectorScaleNode(nodes, 2400, -200)
+        geo_node_group.links.new(vector_add.outputs[0], vector_scale.inputs[0])
+        geo_node_group.links.new(value.outputs[0], vector_scale.inputs[3])
+
+        new_set_position = self.CreateSetPositionNode(nodes, 2600, 0)
+        geo_node_group.links.new(set_position.outputs[0], new_set_position.inputs[0])
+        geo_node_group.links.new(vector_scale.outputs[0], new_set_position.inputs[3])
+
+        transform = self.CreateTransformNode(nodes, 2800, 0)
+        geo_node_group.links.new(new_set_position.outputs[0], transform.inputs[0])
+        
+        object_information = self.CreateObjectInfoNode(nodes, 2600, -400)
+        object_information.inputs[0].default_value = animation_object
+        geo_node_group.links.new(object_information.outputs[2], transform.inputs[3])
+
+        return transform
+
+    def GenerateMaskedPositions(self, geo_node_group, nodes, positions):
+        gradient_texture = self.CreateGradientTextureNode(nodes, 1200, -1200)
+
+        multiply = self.CreateMultiplyNode(nodes, 1400, -1200)
+        multiply.inputs[1].default_value = 6
+        geo_node_group.links.new(gradient_texture.outputs[1], multiply.inputs[0])
+
+        floor = self.CreateFloorNode(nodes, 1600, -1200)
+        geo_node_group.links.new(multiply.outputs[0], floor.inputs[0])
+
+        add = self.CreateAddNode(nodes, 1800, -1200)
+        geo_node_group.links.new(floor.outputs[0], add.inputs[0])
+        add.inputs[1].default_value = 0.5
+
+        divide = self.CreateDivideNode(nodes, 2000, -1200)
+        geo_node_group.links.new(add.outputs[0], divide.inputs[0])
+        divide.inputs[1].default_value = 6
+
+        multiply = self.CreateMultiplyNode(nodes, 2200, -1200)
+        geo_node_group.links.new(divide.outputs[0], multiply.inputs[0])
+        multiply.inputs[1].default_value = 6.283
+
+        cosine = self.CreateCosineNode(nodes, 2400, -1100)
+        geo_node_group.links.new(multiply.outputs[0], cosine.inputs[0])
+
+        sine = self.CreateSineNode(nodes, 2400, -1300)
+        geo_node_group.links.new(multiply.outputs[0], sine.inputs[0])
+
+        combine_xyz = self.CreateCombineXYZNode(nodes, 2600, -1200)
+        geo_node_group.links.new(cosine.outputs[0], combine_xyz.inputs[0])
+        geo_node_group.links.new(sine.outputs[0], combine_xyz.inputs[1])
+        combine_xyz.inputs[2].default_value = 0
+
+        position = self.CreateInputPositionNode(nodes, 2600, -1400)
+
+        dot_product = self.CreateVectorDotProductNode(nodes, 2800, -1200)
+        geo_node_group.links.new(combine_xyz.outputs[0], dot_product.inputs[0])
+        geo_node_group.links.new(position.outputs[0], dot_product.inputs[1])
+
+        less_than = self.CreateFloatLessThanNode(nodes, 3000, -1200)
+        # geo_node_group.links.new(dot_product.outputs[0], less_than.inputs[0])
+        # less_than.inputs[0].default_value = 0.5
+        geo_node_group.links.new(dot_product.outputs[0], less_than.inputs[0])
+        less_than.inputs[1].default_value = -50
+
+        delete_geometry = self.CreateDeleteGeometryNode(nodes, 3200, -1000)
+        geo_node_group.links.new(positions.outputs[0], delete_geometry.inputs[0])
+        geo_node_group.links.new(less_than.outputs[0], delete_geometry.inputs[1])
+
+        return delete_geometry
 
     def CreateNodeInputs(self, node_group):
         node_group.inputs.new(type='NodeSocketInt', name='hexagon_amount')
+        node_group.inputs.new(type='NodeSocketFloat', name='hexagon_spacing')
+        # node_group.inputs.new(type='NodeSocketCollection', name='source_hexagons')
 
     def UpdateNodeInputs(self, node_group, params):
         node_group.inputs["hexagon_amount"].default_value = params.hexagon_amount
+        bpy.data.objects["HexagonWorld"].modifiers["GeometryNodes"]["Input_2"] = params.hexagon_amount
+        node_group.inputs["hexagon_spacing"].default_value = params.hexagon_spacing
+        bpy.data.objects["HexagonWorld"].modifiers["GeometryNodes"]["Input_3"] = params.hexagon_spacing
+        # node_group.inputs["source_hexagons"].default_value = params.source_hexagons
+
+    def CreateValueNode(self, nodes, x=0, y=0, value=0):
+        value_node = nodes.new(type='ShaderNodeValue')
+        value_node.outputs[0].default_value = value
+        self.ChangeLocation(value_node, x, y)
+        return value_node
+
+    def CreateVectorNode(self, nodes, value=(1, 1, 1), x=0, y=0):
+        vector_input = nodes.new(type='FunctionNodeInputVector')
+        self.ChangeLocation(vector_input, x, y)
+        vector_input.outputs[0].default_value = value
+        return vector_input
 
     def CreateGradientTextureNode(self, nodes, x=0, y=0, gradient_type='RADIAL'):
         gradient_texture = nodes.new(type='ShaderNodeTexGradient')
@@ -112,9 +279,10 @@ class OBJECT_OT_HexagonGenerator(Operator):
         self.ChangeLocation(cylinder, x, y)
         return cylinder
 
-    def CreateAddNode(self, nodes, x=0, y=0):
+    def CreateAddNode(self, nodes, x=0, y=0, clamp=False):
         add = nodes.new(type='ShaderNodeMath')
         add.operation = 'ADD'
+        add.use_clamp = clamp
         self.ChangeLocation(add, x, y)
         return add
 
@@ -148,8 +316,14 @@ class OBJECT_OT_HexagonGenerator(Operator):
         self.ChangeLocation(greater_than, x, y)
         return greater_than
 
-    def CreateLessThanNode(self, nodes, x=0, y=0):
+    def CreateMathLessThanNode(self, nodes, x=0, y=0):
         less_than = nodes.new(type='ShaderNodeMath')
+        less_than.operation = 'LESS_THAN'
+        self.ChangeLocation(less_than, x, y)
+        return less_than
+
+    def CreateFloatLessThanNode(self, nodes, x=0, y=0):
+        less_than = nodes.new(type='FunctionNodeCompareFloats')
         less_than.operation = 'LESS_THAN'
         self.ChangeLocation(less_than, x, y)
         return less_than
@@ -267,5 +441,10 @@ class OBJECT_OT_HexagonGenerator(Operator):
         self.ChangeLocation(index, x, y)
         return index
     
+    def CreateInputPositionNode(self, nodes, x=0, y=0):
+        input_position = nodes.new(type='GeometryNodeInputPosition')
+        self.ChangeLocation(input_position, x, y)
+        return input_position
+
     def ChangeLocation(self, node, x, y):
         node.location.xy = (x, y)
