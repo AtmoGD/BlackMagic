@@ -22,8 +22,11 @@ PROPS = [
     ("created_world", bpy.props.PointerProperty(name="Created world", type=bpy.types.Object)),
     ("hexagon_amount", bpy.props.IntProperty(name="Number of hexagons", default=100)),
     ("hexagon_spacing", bpy.props.FloatProperty(name="Space between hexagons", default=0)),
-    ("source_hexagons", bpy.props.PointerProperty(name="The collection of the hexagons", type=bpy.types.Collection)),
-    ("grid_width", bpy.props.IntProperty(name="Grid Width", default=10)),
+    ("errosion", bpy.props.FloatProperty(name="Errosion", default=1)),
+    ("sea_level", bpy.props.FloatProperty(name="Sea Level", default=5)),
+    ("height_min", bpy.props.FloatProperty(name="Height minimum", default=0)),
+    ("height_max", bpy.props.FloatProperty(name="Height maximum", default=10)),
+    # ("source_hexagons", bpy.props.PointerProperty(name="The collection of the hexagons", type=bpy.types.Collection)),
 ]
 
 
