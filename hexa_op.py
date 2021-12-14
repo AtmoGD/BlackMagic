@@ -61,6 +61,7 @@ class OBJECT_OT_HexagonGenerator(Operator):
         print("Change Parameters")
 
     def GenerateWorld(self, params):
+        # master_collection = bpy.data.collections["Scene Collection"]
         # Create new Collection
         collection_hexa_world = bpy.data.collections.new("HEXAGON_WORLD")
         collection_hexagons = bpy.data.collections.new("HEXAGONS")
@@ -73,25 +74,26 @@ class OBJECT_OT_HexagonGenerator(Operator):
         hexagon_mesh = params.context.selected_objects[0]
         hexagon_mesh.name = "HexagonWorld"
         collection_hexagons.objects.link(hexagon_mesh)
+        self.RemoveFromOldCollections(hexagon_mesh)
+
 
         # Add an empty object to manipulate transform animations and one for scale animations
         bpy.ops.object.empty_add()
         animation_transform_object = params.context.selected_objects[0]
         animation_transform_object.name = "AnimationTransformController"
         collection_hexa_world.objects.link(animation_transform_object)
+        self.RemoveFromOldCollections(animation_transform_object)
 
         bpy.ops.object.empty_add()
         animation_scale_object = params.context.selected_objects[0]
         animation_scale_object.name = "AnimationScaleController"
         collection_hexa_world.objects.link(animation_scale_object)
+        self.RemoveFromOldCollections(animation_scale_object)
 
         # Create new mesh and save it. It doesn't matter wich one we just need a mesh to add the geometry nodes
         bpy.ops.mesh.primitive_plane_add()
         params.created_world = params.context.selected_objects[0]
         params.created_world.name = "HexagonWorld"
-        collection_hexa_world.objects.link(params.created_world)
-
-        
 
         # Save the world in the scene propertys
         params.context.scene.created_world = params.created_world
@@ -99,6 +101,9 @@ class OBJECT_OT_HexagonGenerator(Operator):
         # Add the geometry nodes modifier and save it
         bpy.ops.object.modifier_add(type='NODES')
         geo_mod = params.created_world.modifiers[0]
+        
+        self.RemoveFromOldCollections(params.created_world)
+        collection_hexa_world.objects.link(params.created_world)
 
         #Get the geo node group, the nodes, the node output and node input
         geo_node_group = geo_mod.node_group
@@ -122,9 +127,14 @@ class OBJECT_OT_HexagonGenerator(Operator):
         geo_node_group.links.new(water.outputs[0], join_geometry.inputs[0])
         geo_node_group.links.new(hexagons.outputs[0], join_geometry.inputs[0])
 
-
         # Create the output node ---------------- JUST TESTING ---------------------------------------------
         geo_node_group.links.new(join_geometry.outputs[0], group_out.inputs[0])
+
+        self.CreateHexagonTiles()
+
+    def RemoveFromOldCollections(self, object):
+        for col in object.users_collection:
+            col.objects.unlink(object)
 
     def GenerateWater(self, geo_node_group, nodes, masked_positions, group_in):
         bounding_box = self.CreateBoundingBoxNode(nodes, 3600, 0)
@@ -339,6 +349,9 @@ class OBJECT_OT_HexagonGenerator(Operator):
         geo_node_group.links.new(less_than.outputs[0], delete_geometry.inputs[1])
 
         return delete_geometry
+
+    def CreateHexagonTiles(self):
+        bpy.ops.mesh.primitive_cylinder_add(vertices=6, radius=1, depth=1)
 
     def CreateNodeInputs(self, node_group):
         node_group.inputs.new(type='NodeSocketInt', name='hexagon_amount')
