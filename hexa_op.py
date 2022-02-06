@@ -72,23 +72,35 @@ class OBJECT_OT_HexagonGenerator(Operator):
 
         bpy.ops.mesh.primitive_cylinder_add(vertices=6, radius=1, depth=1)
         hexagon_mesh = params.context.selected_objects[0]
-        hexagon_mesh.name = "HexagonWorld"
-        collection_hexagons.objects.link(hexagon_mesh)
+        hexagon_mesh.name = "Hexagon1"
         self.RemoveFromOldCollections(hexagon_mesh)
+        collection_hexagons.objects.link(hexagon_mesh)
+
+        bpy.ops.mesh.primitive_cylinder_add(vertices=6, radius=1, depth=1)
+        hexagon_mesh = params.context.selected_objects[0]
+        hexagon_mesh.name = "Hexagon2"
+        self.RemoveFromOldCollections(hexagon_mesh)
+        collection_hexagons.objects.link(hexagon_mesh)
+
+        bpy.ops.mesh.primitive_cylinder_add(vertices=6, radius=1, depth=1)
+        hexagon_mesh = params.context.selected_objects[0]
+        hexagon_mesh.name = "Hexagon3"
+        self.RemoveFromOldCollections(hexagon_mesh)
+        collection_hexagons.objects.link(hexagon_mesh)
 
 
         # Add an empty object to manipulate transform animations and one for scale animations
-        bpy.ops.object.empty_add()
+        bpy.ops.mesh.primitive_plane_add()
         animation_transform_object = params.context.selected_objects[0]
         animation_transform_object.name = "AnimationTransformController"
-        collection_hexa_world.objects.link(animation_transform_object)
         self.RemoveFromOldCollections(animation_transform_object)
+        collection_hexa_world.objects.link(animation_transform_object)
 
-        bpy.ops.object.empty_add()
+        bpy.ops.mesh.primitive_plane_add()
         animation_scale_object = params.context.selected_objects[0]
         animation_scale_object.name = "AnimationScaleController"
-        collection_hexa_world.objects.link(animation_scale_object)
         self.RemoveFromOldCollections(animation_scale_object)
+        collection_hexa_world.objects.link(animation_scale_object)
 
         # Create new mesh and save it. It doesn't matter wich one we just need a mesh to add the geometry nodes
         bpy.ops.mesh.primitive_plane_add()
@@ -108,7 +120,10 @@ class OBJECT_OT_HexagonGenerator(Operator):
         #Get the geo node group, the nodes, the node output and node input
         geo_node_group = geo_mod.node_group
         nodes = geo_node_group.nodes
+        
         group_in = nodes["Group Input"]
+        self.ChangeLocation(group_in, -1000, -500)
+
         group_out = nodes["Group Output"]
         self.ChangeLocation(group_out, 6000, 0)
 
@@ -123,14 +138,14 @@ class OBJECT_OT_HexagonGenerator(Operator):
         hexagons, instance_index, scale = self.GenerateHexagons(geo_node_group, nodes, masked_positions, collection_hexagons, group_in, animation_transform_object, animation_scale_object)
         water = self.GenerateWater(geo_node_group, nodes, masked_positions, group_in)
 
-        join_geometry = self.CreateJoinGeometryNode(nodes, 5000, 0)
+        join_geometry = self.CreateJoinGeometryNode(nodes, 5800, 0)
         geo_node_group.links.new(water.outputs[0], join_geometry.inputs[0])
         geo_node_group.links.new(hexagons.outputs[0], join_geometry.inputs[0])
 
         # Create the output node ---------------- JUST TESTING ---------------------------------------------
         geo_node_group.links.new(join_geometry.outputs[0], group_out.inputs[0])
 
-        self.CreateHexagonTiles()
+        # self.CreateHexagonTiles()
 
     def RemoveFromOldCollections(self, object):
         for col in object.users_collection:
@@ -147,14 +162,14 @@ class OBJECT_OT_HexagonGenerator(Operator):
         geo_node_group.links.new(seperate_xyz.outputs[0], cylinder.inputs[3])
         cylinder.inputs[4].default_value = 1
 
-        transform = self.CreateTransformNode(nodes, x=4200, y=0)
+        transform = self.CreateTransformNode(nodes, x=4200, y=0, trans_z=0.5)
         geo_node_group.links.new(cylinder.outputs[0], transform.inputs[0])
 
         add = self.CreateAddNode(nodes, x=4000, y=-500)
         geo_node_group.links.new(group_in.outputs["height_min"], add.inputs[0])
         geo_node_group.links.new(group_in.outputs["sea_level"], add.inputs[1])
 
-        combine_xyz = self.CreateCombineXYZNode(nodes, x=4200, y=-500)
+        combine_xyz = self.CreateCombineXYZNode(nodes, x=4200, y=-500, input_x=1, input_y=1)
         geo_node_group.links.new(add.outputs[0], combine_xyz.inputs[2])
 
         transform_second = self.CreateTransformNode(nodes, x=4400, y=0)
@@ -195,7 +210,7 @@ class OBJECT_OT_HexagonGenerator(Operator):
         geo_node_group.links.new(group_in.outputs["height_min"], map_range.inputs[3])
         geo_node_group.links.new(group_in.outputs["height_max"], map_range.inputs[4])
 
-        combine_xyz = self.CreateCombineXYZNode(nodes, 2600, -2300)
+        combine_xyz = self.CreateCombineXYZNode(nodes, 2600, -2300, 1, 1)
         geo_node_group.links.new(map_range.outputs[0], combine_xyz.inputs[2])
 
         object_input_second = self.CreateObjectInfoNode(nodes, 2600, -2100)
@@ -211,10 +226,13 @@ class OBJECT_OT_HexagonGenerator(Operator):
         collection_info = self.CreateCollectionInfoNode(nodes, 2800, -2000)
         collection_info.inputs[0].default_value = hexa_collection
 
+        transform = self.CreateTransformNode(nodes, 3200, -2000, trans_z=0.5)
+        geo_node_group.links.new(collection_info.outputs[0], transform.inputs[0])
+
         instance_on_points = self.CreateInstantiateOnPointsNode(nodes, 3600, -2000)
         geo_node_group.links.new(masked_positions.outputs[0], instance_on_points.inputs[0])
         geo_node_group.links.new(not_equal.outputs[0], instance_on_points.inputs[1])
-        geo_node_group.links.new(collection_info.outputs[0], instance_on_points.inputs[2])
+        geo_node_group.links.new(transform.outputs[0], instance_on_points.inputs[2])
         geo_node_group.links.new(map_range_second.outputs[0], instance_on_points.inputs[4])
         geo_node_group.links.new(multiply.outputs[0], instance_on_points.inputs[6])
 
@@ -341,7 +359,7 @@ class OBJECT_OT_HexagonGenerator(Operator):
         geo_node_group.links.new(position.outputs[0], dot_product.inputs[1])
 
         less_than = self.CreateCompareFloatsNode(nodes, 3000, -1200)
-        geo_node_group.links.new(dot_product.outputs[0], less_than.inputs[0])
+        geo_node_group.links.new(dot_product.outputs[1], less_than.inputs[0])
         less_than.inputs[1].default_value = -50
 
         delete_geometry = self.CreateDeleteGeometryNode(nodes, 3200, -1000)
@@ -471,8 +489,11 @@ class OBJECT_OT_HexagonGenerator(Operator):
         self.ChangeLocation(cosine, x, y)
         return cosine
 
-    def CreateCombineXYZNode(self, nodes, x=0, y=0):
+    def CreateCombineXYZNode(self, nodes, x=0, y=0, input_x=0, input_y=0, input_z=0):
         cobine_xyz = nodes.new(type='ShaderNodeCombineXYZ')
+        cobine_xyz.inputs[0].default_value = input_x
+        cobine_xyz.inputs[1].default_value = input_y
+        cobine_xyz.inputs[2].default_value = input_z
         self.ChangeLocation(cobine_xyz, x, y)
         return cobine_xyz
 
@@ -523,8 +544,9 @@ class OBJECT_OT_HexagonGenerator(Operator):
         self.ChangeLocation(map_range, x, y)
         return map_range
 
-    def CreateTransformNode(self, nodes, x=0, y=0):
+    def CreateTransformNode(self, nodes, x=0, y=0, trans_x=0, trans_y=0, trans_z=0):
         transform = nodes.new(type='GeometryNodeTransform')
+        transform.inputs[1].default_value = [trans_x, trans_y, trans_z]
         self.ChangeLocation(transform, x, y)
         return transform
 
