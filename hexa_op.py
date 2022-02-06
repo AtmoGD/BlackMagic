@@ -9,11 +9,10 @@ class Params():
         self.created_world = context.scene.created_world
         self.hexagon_amount = context.scene.hexagon_amount
         self.hexagon_spacing = context.scene.hexagon_spacing
-        self.errosion = context.scene.errosion
         self.height_min = context.scene.height_min
         self.height_max = context.scene.height_max
         self.sea_level = context.scene.sea_level
-        # self.source_hexagons = context.scene.source_hexagons
+        self.noise = context.scene.noise
 
 class OBJECT_OT_HexagonGenerator(Operator):
     bl_idname = "object.hexagon_generator"
@@ -65,29 +64,20 @@ class OBJECT_OT_HexagonGenerator(Operator):
         # Create new Collection
         collection_hexa_world = bpy.data.collections.new("HEXAGON_WORLD")
         collection_hexagons = bpy.data.collections.new("HEXAGONS")
+        collection_objects = bpy.data.collections.new("OBJECTS")
+        collection_camera_lights = bpy.data.collections.new("CAMERA & LIGHTS")
 
         #A Add Collections to Scene
         bpy.context.scene.collection.children.link(collection_hexa_world)
         bpy.context.scene.collection.children.link(collection_hexagons)
+        bpy.context.scene.collection.children.link(collection_objects)
+        bpy.context.scene.collection.children.link(collection_camera_lights)
 
-        bpy.ops.mesh.primitive_cylinder_add(vertices=6, radius=1, depth=1)
-        hexagon_mesh = params.context.selected_objects[0]
-        hexagon_mesh.name = "Hexagon1"
-        self.RemoveFromOldCollections(hexagon_mesh)
-        collection_hexagons.objects.link(hexagon_mesh)
+        # Create world hexagons
+        self.CreateHexagonTiles(params, collection_hexagons)
 
-        bpy.ops.mesh.primitive_cylinder_add(vertices=6, radius=1, depth=1)
-        hexagon_mesh = params.context.selected_objects[0]
-        hexagon_mesh.name = "Hexagon2"
-        self.RemoveFromOldCollections(hexagon_mesh)
-        collection_hexagons.objects.link(hexagon_mesh)
-
-        bpy.ops.mesh.primitive_cylinder_add(vertices=6, radius=1, depth=1)
-        hexagon_mesh = params.context.selected_objects[0]
-        hexagon_mesh.name = "Hexagon3"
-        self.RemoveFromOldCollections(hexagon_mesh)
-        collection_hexagons.objects.link(hexagon_mesh)
-
+        # Create objects   <----------------------------------------- TO DO -------------------------------------------------->
+        # self.CreateObjects(params, collection_objects)
 
         # Add an empty object to manipulate transform animations and one for scale animations
         bpy.ops.mesh.primitive_plane_add()
@@ -134,7 +124,7 @@ class OBJECT_OT_HexagonGenerator(Operator):
         # ---------------------------------------- Start with the Nodes ------------------------------------
         
         positions = self.GeneratePositions(geo_node_group, group_in, nodes, animation_transform_object)
-        masked_positions = self.GenerateMaskedPositions(geo_node_group, nodes, positions)
+        masked_positions = self.GenerateMaskedPositions(geo_node_group, nodes, group_in, positions)
         hexagons, instance_index, scale = self.GenerateHexagons(geo_node_group, nodes, masked_positions, collection_hexagons, group_in, animation_transform_object, animation_scale_object)
         water = self.GenerateWater(geo_node_group, nodes, masked_positions, group_in)
 
@@ -144,8 +134,6 @@ class OBJECT_OT_HexagonGenerator(Operator):
 
         # Create the output node ---------------- JUST TESTING ---------------------------------------------
         geo_node_group.links.new(join_geometry.outputs[0], group_out.inputs[0])
-
-        # self.CreateHexagonTiles()
 
     def RemoveFromOldCollections(self, object):
         for col in object.users_collection:
@@ -166,7 +154,6 @@ class OBJECT_OT_HexagonGenerator(Operator):
         geo_node_group.links.new(cylinder.outputs[0], transform.inputs[0])
 
         add = self.CreateAddNode(nodes, x=4000, y=-500)
-        geo_node_group.links.new(group_in.outputs["height_min"], add.inputs[0])
         geo_node_group.links.new(group_in.outputs["sea_level"], add.inputs[1])
 
         combine_xyz = self.CreateCombineXYZNode(nodes, x=4200, y=-500, input_x=1, input_y=1)
@@ -176,7 +163,11 @@ class OBJECT_OT_HexagonGenerator(Operator):
         geo_node_group.links.new(transform.outputs[0], transform_second.inputs[0])
         geo_node_group.links.new(combine_xyz.outputs[0], transform_second.inputs[3])
 
-        return transform_second
+        water_material = self.CreateWaterMaterial([0.342, 0.8, 1, 1], 0.1, 2)
+        set_material = self.CreateSetMaterialNode(nodes, water_material, x=4600, y=0)
+        geo_node_group.links.new(transform_second.outputs[0], set_material.inputs[0])
+
+        return set_material
 
     def GenerateHexagons(self, geo_node_group, nodes, masked_positions, hexa_collection, group_in, animation_transform_object, animation_scale_object):
         position = self.CreateInputPositionNode(nodes, 1400, -2000)
@@ -198,12 +189,8 @@ class OBJECT_OT_HexagonGenerator(Operator):
 
         noise_texture = self.CreateNoiseTextureNode(nodes, 2200, -2000)
         geo_node_group.links.new(multiply.outputs[0], noise_texture.inputs[0])
-        noise_texture.inputs[2].default_value = 0.1
+        geo_node_group.links.new(group_in.outputs["noise"], noise_texture.inputs[2])
         noise_texture.inputs[3].default_value = 0
-
-        not_equal = self.CreateCompareFloatsNode(nodes, 2400, -2000, "NOT_EQUAL")
-        geo_node_group.links.new(noise_texture.outputs[0], not_equal.inputs[0])
-        geo_node_group.links.new(group_in.outputs["errosion"], not_equal.inputs[1])
 
         map_range = self.CreateMapRangeNode(nodes, 2400, -2200)
         geo_node_group.links.new(noise_texture.outputs[0], map_range.inputs[0])
@@ -220,7 +207,7 @@ class OBJECT_OT_HexagonGenerator(Operator):
         geo_node_group.links.new(object_input_second.outputs[2], multiply.inputs[0])
         geo_node_group.links.new(combine_xyz.outputs[0], multiply.inputs[1])
 
-        map_range_second = self.CreateMapRangeNode(nodes, 2800, -1600)
+        map_range_second = self.CreateMapRangeNode(nodes, 2800, -1700, to_max=len(hexa_collection.objects))
         geo_node_group.links.new(noise_texture.outputs[0], map_range_second.inputs[0])
 
         collection_info = self.CreateCollectionInfoNode(nodes, 2800, -2000)
@@ -231,7 +218,7 @@ class OBJECT_OT_HexagonGenerator(Operator):
 
         instance_on_points = self.CreateInstantiateOnPointsNode(nodes, 3600, -2000)
         geo_node_group.links.new(masked_positions.outputs[0], instance_on_points.inputs[0])
-        geo_node_group.links.new(not_equal.outputs[0], instance_on_points.inputs[1])
+        geo_node_group.links.new(noise_texture.outputs[0], instance_on_points.inputs[1])
         geo_node_group.links.new(transform.outputs[0], instance_on_points.inputs[2])
         geo_node_group.links.new(map_range_second.outputs[0], instance_on_points.inputs[4])
         geo_node_group.links.new(multiply.outputs[0], instance_on_points.inputs[6])
@@ -319,7 +306,7 @@ class OBJECT_OT_HexagonGenerator(Operator):
 
         return transform
 
-    def GenerateMaskedPositions(self, geo_node_group, nodes, positions):
+    def GenerateMaskedPositions(self, geo_node_group, nodes, group_in, positions):
         gradient_texture = self.CreateGradientTextureNode(nodes, 1200, -1200)
 
         multiply = self.CreateMultiplyNode(nodes, 1400, -1200)
@@ -358,9 +345,12 @@ class OBJECT_OT_HexagonGenerator(Operator):
         geo_node_group.links.new(combine_xyz.outputs[0], dot_product.inputs[0])
         geo_node_group.links.new(position.outputs[0], dot_product.inputs[1])
 
+        multiply = self.CreateMultiplyNode(nodes, 2800, -1400, -0.5)
+        geo_node_group.links.new(group_in.outputs["hexagon_amount"], multiply.inputs[1])
+
         less_than = self.CreateCompareFloatsNode(nodes, 3000, -1200)
         geo_node_group.links.new(dot_product.outputs[1], less_than.inputs[0])
-        less_than.inputs[1].default_value = -50
+        geo_node_group.links.new(multiply.outputs[0], less_than.inputs[1])
 
         delete_geometry = self.CreateDeleteGeometryNode(nodes, 3200, -1000)
         geo_node_group.links.new(positions.outputs[0], delete_geometry.inputs[0])
@@ -368,30 +358,86 @@ class OBJECT_OT_HexagonGenerator(Operator):
 
         return delete_geometry
 
-    def CreateHexagonTiles(self):
+    def CreateObjects(self, params, collection_objects):
         bpy.ops.mesh.primitive_cylinder_add(vertices=6, radius=1, depth=1)
+
+    def CreateHexagonTiles(self, params, collection_hexagons):
+        bpy.ops.mesh.primitive_cylinder_add(vertices=6, radius=1, depth=1)
+        hexagon_mesh = params.context.selected_objects[0]
+        sand_material = self.CreateBasicMaterial("Sand", [0.8, 0.435, 0.19, 1])
+        hexagon_mesh.data.materials.append(sand_material)
+        hexagon_mesh.name = "001.Sand"
+        self.RemoveFromOldCollections(hexagon_mesh)
+        collection_hexagons.objects.link(hexagon_mesh)
+
+        bpy.ops.mesh.primitive_cylinder_add(vertices=6, radius=1, depth=1)
+        hexagon_mesh = params.context.selected_objects[0]
+        gras_material = self.CreateBasicMaterial("Gras", [0.255, 0.8, 0.124, 1])
+        hexagon_mesh.data.materials.append(gras_material)
+        hexagon_mesh.name = "002.Gras"
+        self.RemoveFromOldCollections(hexagon_mesh)
+        collection_hexagons.objects.link(hexagon_mesh)
+
+        bpy.ops.mesh.primitive_cylinder_add(vertices=6, radius=1, depth=1)
+        hexagon_mesh = params.context.selected_objects[0]
+        rock_material = self.CreateBasicMaterial("Rock", [0.08, 0.08, 0.08, 1])
+        hexagon_mesh.data.materials.append(rock_material)
+        hexagon_mesh.name = "003.Rock"
+        self.RemoveFromOldCollections(hexagon_mesh)
+        collection_hexagons.objects.link(hexagon_mesh)
+
+        bpy.ops.mesh.primitive_cylinder_add(vertices=6, radius=1, depth=1)
+        hexagon_mesh = params.context.selected_objects[0]
+        snow_material = self.CreateBasicMaterial("Snow", [0.8, 0.8, 0.8, 1])
+        hexagon_mesh.data.materials.append(snow_material)
+        hexagon_mesh.name = "004.Snow"
+        self.RemoveFromOldCollections(hexagon_mesh)
+        collection_hexagons.objects.link(hexagon_mesh)
+
+    def CreateBasicMaterial(self, name, color):
+        material = bpy.data.materials.new(name)
+        material.use_nodes = True
+        material_nodes = material.node_tree.nodes
+        material_nodes["Principled BSDF"].inputs[0].default_value = color
+        return material
+
+    def CreateWaterMaterial(self, color, roughness, iqr):
+        material = bpy.data.materials.new("Water")
+        material.use_nodes = True
+        material_nodes = material.node_tree.nodes
+
+        glass_node = material_nodes.new("ShaderNodeBsdfGlass")
+        glass_node.inputs[0].default_value = color
+        glass_node.inputs[1].default_value = roughness
+        glass_node.inputs[2].default_value = iqr
+
+        output = material_nodes["Material Output"]
+
+        material.node_tree.links.new(glass_node.outputs[0], output.inputs[0])
+
+        return material
 
     def CreateNodeInputs(self, node_group):
         node_group.inputs.new(type='NodeSocketInt', name='hexagon_amount')
         node_group.inputs.new(type='NodeSocketFloat', name='hexagon_spacing')
-        node_group.inputs.new(type='NodeSocketFloat', name='errosion')
         node_group.inputs.new(type='NodeSocketFloat', name='height_min')
         node_group.inputs.new(type='NodeSocketFloat', name='height_max')
         node_group.inputs.new(type='NodeSocketFloat', name='sea_level')
+        node_group.inputs.new(type='NodeSocketFloat', name='noise')
 
     def UpdateNodeInputs(self, node_group, params):
         node_group.inputs["hexagon_amount"].default_value = params.hexagon_amount
         bpy.data.objects["HexagonWorld"].modifiers["GeometryNodes"]["Input_2"] = params.hexagon_amount
         node_group.inputs["hexagon_spacing"].default_value = params.hexagon_spacing
         bpy.data.objects["HexagonWorld"].modifiers["GeometryNodes"]["Input_3"] = params.hexagon_spacing
-        node_group.inputs["errosion"].default_value = params.errosion
-        bpy.data.objects["HexagonWorld"].modifiers["GeometryNodes"]["Input_4"] = params.errosion
         node_group.inputs["height_min"].default_value = params.height_min
-        bpy.data.objects["HexagonWorld"].modifiers["GeometryNodes"]["Input_5"] = params.height_min
+        bpy.data.objects["HexagonWorld"].modifiers["GeometryNodes"]["Input_4"] = params.height_min
         node_group.inputs["height_max"].default_value = params.height_max
-        bpy.data.objects["HexagonWorld"].modifiers["GeometryNodes"]["Input_6"] = params.height_max
+        bpy.data.objects["HexagonWorld"].modifiers["GeometryNodes"]["Input_5"] = params.height_max
         node_group.inputs["sea_level"].default_value = params.sea_level
-        bpy.data.objects["HexagonWorld"].modifiers["GeometryNodes"]["Input_7"] = params.sea_level
+        bpy.data.objects["HexagonWorld"].modifiers["GeometryNodes"]["Input_6"] = params.sea_level
+        node_group.inputs["noise"].default_value = params.noise
+        bpy.data.objects["HexagonWorld"].modifiers["GeometryNodes"]["Input_7"] = params.noise
 
     def CreateValueNode(self, nodes, x=0, y=0, value=0):
         value_node = nodes.new(type='ShaderNodeValue')
@@ -428,16 +474,20 @@ class OBJECT_OT_HexagonGenerator(Operator):
         self.ChangeLocation(cylinder, x, y)
         return cylinder
 
-    def CreateAddNode(self, nodes, x=0, y=0, clamp=False):
+    def CreateAddNode(self, nodes, x=0, y=0, clamp=False, first_value=0, second_value=0):
         add = nodes.new(type='ShaderNodeMath')
         add.operation = 'ADD'
         add.use_clamp = clamp
+        add.inputs[0].default_value = first_value
+        add.inputs[1].default_value = second_value
         self.ChangeLocation(add, x, y)
         return add
 
-    def CreateMultiplyNode(self, nodes, x=0, y=0):
+    def CreateMultiplyNode(self, nodes, x=0, y=0, first_value=0, second_value=0):
         multiply = nodes.new(type='ShaderNodeMath')
         multiply.operation = 'MULTIPLY'
+        multiply.inputs[0].default_value = first_value
+        multiply.inputs[1].default_value = second_value
         self.ChangeLocation(multiply, x, y)
         return multiply
 
@@ -539,8 +589,12 @@ class OBJECT_OT_HexagonGenerator(Operator):
         self.ChangeLocation(vector_dot_product, x, y)
         return vector_dot_product
 
-    def CreateMapRangeNode(self, nodes, x=0, y=0):
+    def CreateMapRangeNode(self, nodes, x=0, y=0, from_min=0, from_max=1, to_min=0, to_max=1):
         map_range = nodes.new(type='ShaderNodeMapRange')
+        map_range.inputs[1].default_value = from_min
+        map_range.inputs[2].default_value = from_max
+        map_range.inputs[3].default_value = to_min
+        map_range.inputs[4].default_value = to_max
         self.ChangeLocation(map_range, x, y)
         return map_range
 
@@ -574,8 +628,9 @@ class OBJECT_OT_HexagonGenerator(Operator):
         self.ChangeLocation(set_position, x, y)
         return set_position
         
-    def CreateSetMaterialNode(self, nodes, x=0, y=0):
+    def CreateSetMaterialNode(self, nodes, material, x=0, y=0):
         set_material = nodes.new(type='GeometryNodeSetMaterial')
+        set_material.inputs[2].default_value = material
         self.ChangeLocation(set_material, x, y)
         return set_material
 
