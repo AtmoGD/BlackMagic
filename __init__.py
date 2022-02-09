@@ -25,7 +25,8 @@ PROPS = [
     ("height_min", bpy.props.FloatProperty(name="Height minimum", default=3)),
     ("height_max", bpy.props.FloatProperty(name="Height maximum", default=20)),
     ("sea_level", bpy.props.FloatProperty(name="Sea Level", default=6)),
-    ("noise", bpy.props.FloatProperty(name="Enviroment noise", default=0.05))
+    ("noise", bpy.props.FloatProperty(name="Enviroment noise", default=0.05)),
+    ("object_probability", bpy.props.FloatProperty(name="Object probability", default=0.3))
 ]
 
 

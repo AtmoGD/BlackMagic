@@ -16,4 +16,5 @@ class OBJECT_PT_HexagonPanel(Panel):
         layout.row().prop(context.scene, "height_max")
         layout.row().prop(context.scene, "sea_level")
         layout.row().prop(context.scene, "noise")
+        layout.row().prop(context.scene, "object_probability")
         layout.row().operator("object.hexagon_generator", text="Generate Hexagon")
