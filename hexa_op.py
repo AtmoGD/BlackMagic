@@ -1,10 +1,9 @@
+from re import S
 import bpy
-# from bpy.ops.object import collection_add
-from bpy.types import Mask, Operator
+import random
+from bpy.types import Operator
 
 # Just a helper class so you don't have to always type "context.scene..."
-
-
 class Params():
     def __init__(self, context):
         self.context = context
@@ -15,6 +14,10 @@ class Params():
         self.height_max = context.scene.height_max
         self.sea_level = context.scene.sea_level
         self.noise = context.scene.noise
+        self.noise_time = context.scene.noise_time
+        self.detail = context.scene.detail
+        self.roughness = context.scene.roughness
+        self.distortion = context.scene.distortion
         self.object_probability = context.scene.object_probability
 
 
@@ -31,7 +34,7 @@ class OBJECT_OT_HexagonGenerator(Operator):
     def execute(self, context):
         # Check if we should delete the scene. Here we are using "context.scene" because params are not created yet
         if(context.scene.delete_scene):
-            self.deleteScene(context)
+            self.DeleteScene(context)
 
         # Get all parameters
         params = Params(context)
@@ -44,7 +47,7 @@ class OBJECT_OT_HexagonGenerator(Operator):
 
         return {'FINISHED'}
 
-    def deleteScene(self, context):
+    def DeleteScene(self, context):
         # Delete scene property references
         context.scene.created_world = None
 
@@ -58,10 +61,11 @@ class OBJECT_OT_HexagonGenerator(Operator):
         # Delete all meshdata etc. what is left
         bpy.ops.outliner.orphans_purge()
 
-    def ChangeParameters(self, params):
+    def GetRandomNumber(self, min, max):
+        return random.uniform(min, max)
 
+    def ChangeParameters(self, params):
         self.UpdateNodeInputs(params.created_world.modifiers[0].node_group, params)
-        print("Change Parameters")
 
     def GenerateWorld(self, params):
 
@@ -165,6 +169,10 @@ class OBJECT_OT_HexagonGenerator(Operator):
         node_group.inputs.new(type='NodeSocketFloat', name='height_max')
         node_group.inputs.new(type='NodeSocketFloat', name='sea_level')
         node_group.inputs.new(type='NodeSocketFloat', name='noise')
+        node_group.inputs.new(type='NodeSocketFloat', name='noise_time')
+        node_group.inputs.new(type='NodeSocketFloat', name='detail')
+        node_group.inputs.new(type='NodeSocketFloat', name='roughness')
+        node_group.inputs.new(type='NodeSocketFloat', name='distortion')
         node_group.inputs.new(type='NodeSocketFloat', name='object_probability')
 
     def UpdateNodeInputs(self, node_group, params):
@@ -180,8 +188,16 @@ class OBJECT_OT_HexagonGenerator(Operator):
         bpy.data.objects["HexagonWorld"].modifiers["GeometryNodes"]["Input_6"] = params.sea_level
         node_group.inputs["noise"].default_value = params.noise
         bpy.data.objects["HexagonWorld"].modifiers["GeometryNodes"]["Input_7"] = params.noise
+        node_group.inputs["noise_time"].default_value = params.noise_time
+        bpy.data.objects["HexagonWorld"].modifiers["GeometryNodes"]["Input_8"] = params.noise_time
+        node_group.inputs["detail"].default_value = params.detail
+        bpy.data.objects["HexagonWorld"].modifiers["GeometryNodes"]["Input_9"] = params.detail
+        node_group.inputs["roughness"].default_value = params.roughness
+        bpy.data.objects["HexagonWorld"].modifiers["GeometryNodes"]["Input_10"] = params.roughness
+        node_group.inputs["distortion"].default_value = params.distortion
+        bpy.data.objects["HexagonWorld"].modifiers["GeometryNodes"]["Input_11"] = params.distortion
         node_group.inputs["object_probability"].default_value = params.object_probability
-        bpy.data.objects["HexagonWorld"].modifiers["GeometryNodes"]["Input_8"] = params.object_probability
+        bpy.data.objects["HexagonWorld"].modifiers["GeometryNodes"]["Input_12"] = params.object_probability
     
     def CreateHexagonTiles(self, params, collection_hexagons):
         bpy.ops.mesh.primitive_cylinder_add(vertices=6, radius=1, depth=1)
@@ -219,7 +235,8 @@ class OBJECT_OT_HexagonGenerator(Operator):
 
     def CreateObjects(self, params, collection_objects):
         self.CreateTree(params, collection_objects)
-        self.CreateBush(params, collection_objects)
+        for i in range(random.randrange(1, 10)):
+            self.CreateBush(params, collection_objects)
 
     def CreateTree(self, params, collection_objects):
         bpy.ops.mesh.primitive_cylinder_add(vertices=16, radius=0.5, depth=2)
@@ -257,14 +274,20 @@ class OBJECT_OT_HexagonGenerator(Operator):
         bpy.ops.object.join()
 
     def CreateBush(self, params, collection_objects):
+        bpy.ops.mesh.primitive_cylinder_add(vertices=16, radius=0, depth=2)
+        bush_empty = params.context.selected_objects[0]
+        bush_empty.name = "Bush"
+        self.RemoveFromOldCollections(bush_empty)
+        collection_objects.objects.link(bush_empty)
+
         bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=2, radius=0.5)
         bush = params.context.selected_objects[0]
-        bush_material = self.CreateBasicMaterial(
-            "Bush", [0.465, 0.8, 0.128, 1])
+        bush_material = self.CreateBasicMaterial("Bush", [0.465, 0.8, 0.128, 1])
         bush.data.materials.append(bush_material)
         bush.name = "Bush"
         self.RemoveFromOldCollections(bush)
         collection_objects.objects.link(bush)
+        bpy.ops.transform.transform(value=(0, 0, -0.8, 0))
 
         bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=2, radius=0.5)
         bush_second = params.context.selected_objects[0]
@@ -272,7 +295,7 @@ class OBJECT_OT_HexagonGenerator(Operator):
         bush_second.name = "Bush Second"
         self.RemoveFromOldCollections(bush_second)
         collection_objects.objects.link(bush_second)
-        bpy.ops.transform.transform(value=(0.2, 0.15, 0.25, 0))
+        bpy.ops.transform.transform(value=(self.GetRandomNumber(-0.3, 0.3), self.GetRandomNumber(-0.3, 0.3), self.GetRandomNumber(-0.8, -0.5), 0))
 
         bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=2, radius=0.5)
         bush_third = params.context.selected_objects[0]
@@ -280,13 +303,14 @@ class OBJECT_OT_HexagonGenerator(Operator):
         bush_third.name = "Bush Third"
         self.RemoveFromOldCollections(bush_third)
         collection_objects.objects.link(bush_third)
-        bpy.ops.transform.transform(value=(-0.3, -0.2, 0.1, 0))
+        bpy.ops.transform.transform(value=(self.GetRandomNumber(-0.3, 0.3), self.GetRandomNumber(-0.3, 0.3), self.GetRandomNumber(-0.8, -0.5), 0))
 
         bpy.ops.object.select_all(action="DESELECT")
         bush.select_set(True)
         bush_second.select_set(True)
         bush_third.select_set(True)
-        bpy.context.view_layer.objects.active = bush
+        bush_empty.select_set(True)
+        bpy.context.view_layer.objects.active = bush_empty
         bpy.ops.object.join()
 
     def CreateCameraAndLights(self, params, collection_objects):
@@ -391,9 +415,13 @@ class OBJECT_OT_HexagonGenerator(Operator):
         geo_node_group.links.new(vector_rotate.outputs[0], multiply.inputs[0])
         geo_node_group.links.new(object_input.outputs[2], multiply.inputs[1])
 
-        noise_texture = self.CreateNoiseTextureNode(nodes, 2200, -2000)
+        noise_texture = self.CreateNoiseTextureNode(nodes, 2200, -2000, noise_dimensions="4D")
         geo_node_group.links.new(multiply.outputs[0], noise_texture.inputs[0])
+        geo_node_group.links.new(group_in.outputs["noise_time"], noise_texture.inputs[1])
         geo_node_group.links.new(group_in.outputs["noise"], noise_texture.inputs[2])
+        geo_node_group.links.new(group_in.outputs["detail"], noise_texture.inputs[3])
+        geo_node_group.links.new(group_in.outputs["roughness"], noise_texture.inputs[4])
+        geo_node_group.links.new(group_in.outputs["distortion"], noise_texture.inputs[5])
         noise_texture.inputs[3].default_value = 0
 
         map_range = self.CreateMapRangeNode(nodes, 2400, -2200)
