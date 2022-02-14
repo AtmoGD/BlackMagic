@@ -1,4 +1,3 @@
-from re import S
 import bpy
 import random
 from bpy.types import Operator

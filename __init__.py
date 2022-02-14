@@ -9,7 +9,6 @@ bl_info = {
 }
 
 import bpy
-
 from .hexa_op import OBJECT_OT_HexagonGenerator
 from .hexa_panel import OBJECT_PT_HexagonPanel
 
