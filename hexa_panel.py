@@ -3,7 +3,7 @@ from bpy.types import Panel
 class OBJECT_PT_HexagonPanel(Panel):
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "Item"
+    bl_category = "Hexagon Generator"
     bl_label = "Hexagon Generator"
 
     def draw(self, context):
